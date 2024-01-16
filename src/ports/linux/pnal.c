@@ -307,7 +307,7 @@ static pnal_eth_mau_t calculate_mau_type (
          switch (speed)
          {
          case SPEED_10:
-            return PNAL_ETH_MAU_COPPER_10BaseTX_FULL_DUPLEX;
+            return PNAL_ETH_MAU_COPPER_10BaseT_FULL_DUPLEX;
          case SPEED_100:
             return PNAL_ETH_MAU_COPPER_100BaseTX_FULL_DUPLEX;
          case SPEED_1000:
@@ -327,7 +327,7 @@ static pnal_eth_mau_t calculate_mau_type (
          switch (speed)
          {
          case SPEED_10:
-            return PNAL_ETH_MAU_COPPER_10BaseTX_HALF_DUPLEX;
+            return PNAL_ETH_MAU_COPPER_10BaseT_HALF_DUPLEX;
          case SPEED_100:
             return PNAL_ETH_MAU_COPPER_100BaseTX_HALF_DUPLEX;
          case SPEED_1000:
