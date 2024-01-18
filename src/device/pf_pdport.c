@@ -96,10 +96,10 @@ static int pf_pdport_speed(pnet_t *net, int loc_port_num, uint16_t mau_type)
       case PNAL_ETH_MAU_COPPER_10BaseT: /* duplex "unknown" */
 	 speed = "10"; duplex = "full";
 	 break;
-      case PNAL_ETH_MAU_COPPER_10BaseTX_HALF_DUPLEX:
+      case PNAL_ETH_MAU_COPPER_10BaseT_HALF_DUPLEX:
 	 speed = "10"; duplex = "half";
 	 break;
-      case PNAL_ETH_MAU_COPPER_10BaseTX_FULL_DUPLEX:
+      case PNAL_ETH_MAU_COPPER_10BaseT_FULL_DUPLEX:
 	 speed = "10"; duplex = "full";
 	 break;
       case PNAL_ETH_MAU_COPPER_100BaseTX_HALF_DUPLEX:
