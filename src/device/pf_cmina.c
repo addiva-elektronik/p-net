@@ -312,6 +312,8 @@ int pf_cmina_set_default_cfg (pnet_t * net, uint16_t reset_mode)
          net->cmina_nonvolatile_dcp_ase.full_ip_suite.ip_suite.ip_mask = 0;
          net->cmina_nonvolatile_dcp_ase.full_ip_suite.ip_suite.ip_gateway = 0;
 
+         net->cmina_commit_ip_suite = true;
+
          /* Clear name of station */
          memset (
             net->cmina_nonvolatile_dcp_ase.station_name,
