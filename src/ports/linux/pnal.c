@@ -507,6 +507,9 @@ int pnal_eth_get_status (const char * interface_name, pnal_eth_status_t * status
       ret = 0;
    }
 
+   memset(&ifr, 0, sizeof(ifr));
+   snprintf(ifr.ifr_name, IFNAMSIZ, "%s", interface_name);
+
    if (ioctl (control_socket, SIOCGIFFLAGS, &ifr) >= 0)
    {
       status->running = (ifr.ifr_flags & IFF_RUNNING) ? true : false;
