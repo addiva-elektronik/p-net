@@ -4467,6 +4467,96 @@ void pf_put_pdport_data_adj_link_state (
    pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
 }
 
+/**
+ * @internal
+ * Insert link_state
+ * @param is_big_endian           In:    Endianness of the destination buffer.
+ * @param speed                   In:    The p-net stack instance
+ * @param res_len                 In:    Size of destination buffer.
+ * @param p_bytes                 Out:   Destination buffer.
+ * @param p_pos                   InOut: Position in destination buffer.
+ */
+void pf_put_speed (
+   bool is_big_endian,
+   const pnal_eth_mau_t* speed,
+   uint16_t res_len,
+   uint8_t * p_bytes,
+   uint16_t * p_pos)
+{
+   uint16_t block_pos = *p_pos;
+   uint16_t block_len = 0;
+
+   /* Block header first */
+   pf_put_block_header (
+      is_big_endian,
+      PF_BT_ADJUST_MAU_TYPE,
+      0, /* Dont know block_len yet */
+      PNET_BLOCK_VERSION_HIGH,
+      PNET_BLOCK_VERSION_LOW,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   pf_put_padding (2, res_len, p_bytes, p_pos);
+
+   /* Adjusted MAU Type */
+   pf_put_byte (0x00, res_len, p_bytes, p_pos);
+   pf_put_byte (*speed, res_len, p_bytes, p_pos);
+
+   /* Adjust Properties*/
+   pf_put_byte (0x00, res_len, p_bytes, p_pos);
+   pf_put_byte (0x00, res_len, p_bytes, p_pos);
+
+   /* Finally insert the block length into the block header */
+   block_len = *p_pos - (block_pos + 4);
+   block_pos += offsetof (pf_block_header_t, block_length); /* Point to correct
+                                                               place */
+   pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
+}
+
+void pf_put_pdport_data_adj_speed (
+   bool is_big_endian,
+   uint16_t subslot,
+   const pnal_eth_mau_t * speed,
+   uint16_t res_len,
+   uint8_t * p_bytes,
+   uint16_t * p_pos)
+{
+   uint16_t block_pos = *p_pos;
+   uint16_t block_len = 0;
+
+   /* Block header first */
+   pf_put_block_header (
+      is_big_endian,
+      PF_BT_PDPORT_DATA_ADJUST,
+      0, /* Dont know block_len yet */
+      PNET_BLOCK_VERSION_HIGH,
+      PNET_BLOCK_VERSION_LOW,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   pf_put_padding (2, res_len, p_bytes, p_pos);
+
+   /* Slot and subslot */
+   pf_put_uint16 (is_big_endian, PNET_SLOT_DAP_IDENT, res_len, p_bytes, p_pos);
+   pf_put_uint16 (is_big_endian, subslot, res_len, p_bytes, p_pos);
+
+   /* link speed */
+   pf_put_speed (
+      is_big_endian,
+      speed,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   /* Finally insert the block length into the block header */
+   block_len = *p_pos - (block_pos + 4);
+   block_pos += offsetof (pf_block_header_t, block_length); /* Point to correct
+                                                               place */
+   pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
+}
+
 void pf_put_pd_interface_adj (
    bool is_big_endian,
    uint16_t subslot,

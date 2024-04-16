@@ -682,6 +682,17 @@ int pf_pdport_read_ind (
                p_res,
                p_pos);
          }
+         else if (p_port_data->pdport.adjust.mask & PF_PDPORT_ADJUST_MAUT_MASK)
+         {
+            pf_put_pdport_data_adj_speed (
+               true,
+               subslot,
+               &p_port_data->pdport.adjust.speed,
+               res_size,
+               p_res,
+               p_pos);
+         }
+         
          ret = 0;
       }
       break;
