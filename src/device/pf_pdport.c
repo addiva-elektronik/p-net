@@ -664,10 +664,20 @@ int pf_pdport_read_ind (
          p_port_data = pf_port_get_state (net, loc_port_num);
          if (p_port_data->pdport.adjust.mask & PF_PDPORT_ADJUST_P2PB_MASK)
          {
-            pf_put_pdport_data_adj (
+            pf_put_pdport_data_adj_p2pb (
                true,
                subslot,
                &p_port_data->pdport.adjust.peer_to_peer_boundary,
+               res_size,
+               p_res,
+               p_pos);
+         }
+         else if (p_port_data->pdport.adjust.mask & PF_PDPORT_ADJUST_LINK_MASK)
+         {
+            pf_put_pdport_data_adj_link_state (
+               true,
+               subslot,
+               &p_port_data->pdport.adjust.link_state,
                res_size,
                p_res,
                p_pos);
@@ -1425,7 +1435,7 @@ static int pf_pdport_write_data_adj (
 	 ret = pf_pdport_enadis(net, loc_port_num, link_state.link);
       }
       break;
-   case PF_BT_PEER_TO_PEER_BOUNDARY:
+   case PF_BT_ADJUST_PEER_TO_PEER_BOUNDARY:
       pf_get_port_data_adjust_peer_to_peer_boundary (&get_info, &pos, &boundary);
       if (get_info.result == PF_PARSE_OK)
       {

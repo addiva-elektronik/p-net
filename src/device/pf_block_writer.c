@@ -4278,7 +4278,7 @@ void pf_put_peer_to_peer_boundary (
    /* Block header first */
    pf_put_block_header (
       is_big_endian,
-      PF_BT_PEER_TO_PEER_BOUNDARY,
+      PF_BT_ADJUST_PEER_TO_PEER_BOUNDARY,
       0, /* Dont know block_len yet */
       PNET_BLOCK_VERSION_HIGH,
       PNET_BLOCK_VERSION_LOW,
@@ -4291,7 +4291,8 @@ void pf_put_peer_to_peer_boundary (
    /* Adjusted Peer to Peer Boundary */
    temp_u32 = 0;
    pf_put_bits (
-      p_peer_to_peer_boundary->peer_to_peer_boundary.do_not_send_LLDP_frames,
+      p_peer_to_peer_boundary->peer_to_peer_boundary
+         .do_not_send_LLDP_frames,
       1,
       0,
       &temp_u32);
@@ -4327,7 +4328,7 @@ void pf_put_peer_to_peer_boundary (
    pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
 }
 
-void pf_put_pdport_data_adj (
+void pf_put_pdport_data_adj_p2pb (
    bool is_big_endian,
    uint16_t subslot,
    const pf_adjust_peer_to_peer_boundary_t * p_peer_to_peer_boundary,
@@ -4341,7 +4342,7 @@ void pf_put_pdport_data_adj (
    /* Block header first */
    pf_put_block_header (
       is_big_endian,
-      PF_BT_BOUNDARY_ADJUST,
+      PF_BT_PDPORT_DATA_ADJUST,
       0, /* Dont know block_len yet */
       PNET_BLOCK_VERSION_HIGH,
       PNET_BLOCK_VERSION_LOW,
@@ -4359,6 +4360,102 @@ void pf_put_pdport_data_adj (
    pf_put_peer_to_peer_boundary (
       is_big_endian,
       p_peer_to_peer_boundary,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   /* Finally insert the block length into the block header */
+   block_len = *p_pos - (block_pos + 4);
+   block_pos += offsetof (pf_block_header_t, block_length); /* Point to correct
+                                                               place */
+   pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
+}
+
+/**
+ * @internal
+ * Insert link_state
+ * @param is_big_endian           In:    Endianness of the destination buffer.
+ * @param link_state              In:    The p-net stack instance
+ * @param res_len                 In:    Size of destination buffer.
+ * @param p_bytes                 Out:   Destination buffer.
+ * @param p_pos                   InOut: Position in destination buffer.
+ */
+void pf_put_link_state (
+   bool is_big_endian,
+   const pf_adjust_link_state_t* link_state,
+   uint16_t res_len,
+   uint8_t * p_bytes,
+   uint16_t * p_pos)
+{
+   uint16_t block_pos = *p_pos;
+   uint16_t block_len = 0;
+
+   /* Block header first */
+   pf_put_block_header (
+      is_big_endian,
+      PF_BT_ADJUST_LINK_STATE,
+      0, /* Dont know block_len yet */
+      PNET_BLOCK_VERSION_HIGH,
+      PNET_BLOCK_VERSION_LOW,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   pf_put_padding (2, res_len, p_bytes, p_pos);
+
+      /* Adjusted Link State : pf_link_state_port_t */
+   pf_put_byte (link_state->port, res_len, p_bytes, p_pos);
+
+   /* Adjusted Link State : pf_link_state_link_t */
+   pf_put_byte (link_state->link, res_len, p_bytes, p_pos);
+
+   /* Adjust Properties*/
+   pf_put_uint16 (
+      is_big_endian,
+      link_state->adjust_properties,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   /* Finally insert the block length into the block header */
+   block_len = *p_pos - (block_pos + 4);
+   block_pos += offsetof (pf_block_header_t, block_length); /* Point to correct
+                                                               place */
+   pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
+}
+
+void pf_put_pdport_data_adj_link_state (
+   bool is_big_endian,
+   uint16_t subslot,
+   const pf_adjust_link_state_t * link_state,
+   uint16_t res_len,
+   uint8_t * p_bytes,
+   uint16_t * p_pos)
+{
+   uint16_t block_pos = *p_pos;
+   uint16_t block_len = 0;
+
+   /* Block header first */
+   pf_put_block_header (
+      is_big_endian,
+      PF_BT_PDPORT_DATA_ADJUST,
+      0, /* Dont know block_len yet */
+      PNET_BLOCK_VERSION_HIGH,
+      PNET_BLOCK_VERSION_LOW,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   pf_put_padding (2, res_len, p_bytes, p_pos);
+
+   /* Slot and subslot */
+   pf_put_uint16 (is_big_endian, PNET_SLOT_DAP_IDENT, res_len, p_bytes, p_pos);
+   pf_put_uint16 (is_big_endian, subslot, res_len, p_bytes, p_pos);
+
+   /* link state */
+   pf_put_link_state (
+      is_big_endian,
+      link_state,
       res_len,
       p_bytes,
       p_pos);
