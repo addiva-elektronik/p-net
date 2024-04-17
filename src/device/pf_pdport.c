@@ -743,10 +743,8 @@ int pf_pdport_read_ind (
 
    case PF_IDX_DEV_PDREAL_DATA:
       /* Combined interface and port info and statistics */
-      if (
-         (slot == PNET_SLOT_DAP_IDENT) &&
-         ((subslot == PNET_SUBSLOT_DAP_WHOLE_MODULE) ||
-          (subslot == PNET_SUBSLOT_DAP_IDENT)))
+
+      if (slot == PNET_SLOT_DAP_IDENT)    
       {
          pf_cmina_get_station_name (net, station_name);
          if (
