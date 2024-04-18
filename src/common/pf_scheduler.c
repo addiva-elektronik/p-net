@@ -451,13 +451,12 @@ void pf_scheduler_tick (pnet_t * net)
    os_mutex_lock (net->scheduler_timeout_mutex);
 
    /* Send event to all expired delay entries. */
-   while ((net->scheduler_timeout_first < PF_MAX_TIMEOUTS) &&
+   while (((ix = net->scheduler_timeout_first) < PF_MAX_TIMEOUTS) &&
           ((int32_t) (
               pf_current_time -
               net->scheduler_timeouts[net->scheduler_timeout_first].when) >= 0))
    {
       /* Unlink from busy list */
-      ix = net->scheduler_timeout_first;
       pf_scheduler_unlink (net, &net->scheduler_timeout_first, ix);
 
       ftn = net->scheduler_timeouts[ix].cb;
