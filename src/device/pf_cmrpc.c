@@ -1928,11 +1928,16 @@ static int pf_cmrpc_rm_connect_ind (
    uint16_t req_pos,
    uint16_t res_size,
    uint8_t * p_res,
-   uint16_t * p_res_pos)
+   uint16_t * p_res_pos,
+   bool * p_call_pnet_abort,
+   pf_ar_t ** pp_ar_2
+   )
 {
    int ret = -1;
    pf_ar_t * p_ar = NULL;
    pf_ar_t * p_ar_2 = NULL; /* When looking for duplicate */
+
+   *p_call_pnet_abort = false;
 
    if (p_sess->rpc_result.pnio_status.error_code != PNET_ERROR_CODE_NOERROR)
    {
@@ -2035,11 +2040,23 @@ static int pf_cmrpc_rm_connect_ind (
       p_sess->rpc_result.pnio_status.error_decode,
       p_sess->rpc_result.pnio_status.error_code_1,
       p_sess->rpc_result.pnio_status.error_code_2);
+   
    pf_cmrpc_rm_connect_rsp (p_sess, ret, p_ar, res_size, p_res, p_res_pos);
 
+   /* Duplicate CONNECT request received */
    if (p_ar_2 != NULL)
    {
-      (void)pf_cmdev_cm_abort (net, p_ar_2);
+      /* Set alarm error code for duplicate CONNECT request */
+      p_ar_2->err_code = PNET_ERROR_CODE_2_ABORT_AR_RE_RUN_ABORTS_EXISTING;
+
+      /* Set flag for sending an alarm packet after the CONNECT response is sent */
+      *p_call_pnet_abort = true;
+
+      /* Retrieve the address of the AR duplicate which should be removed */
+      *pp_ar_2 = p_ar_2;
+
+      /* [ret = 0] - in order to send a CONNECT response afterwards */
+      ret = 0;
    }
    else if (
       (ret != 0) ||
@@ -2056,11 +2073,7 @@ static int pf_cmrpc_rm_connect_ind (
       pf_pdport_lldp_restart_transmission (net);
    }
 
-   LOG_DEBUG (
-      PF_RPC_LOG,
-      "CMRPC(%d): Created connect response: ret %d\n",
-      __LINE__,
-      ret);
+   LOG_DEBUG (PF_RPC_LOG, "CMRPC(%d): Created connect response: ret %d\n", __LINE__, ret);
 
    return ret;
 }
@@ -3580,24 +3593,26 @@ static int pf_cmrpc_rpc_request (
    uint16_t res_size,
    uint8_t * p_res,
    uint16_t * p_res_pos,
-   bool * p_set_state_prmend)
+   bool * p_set_state_prmend,
+   bool * p_call_pnet_abort,
+   pf_ar_t ** pp_ar_2
+   )
 {
    int ret = -1;
 
    switch (p_rpc->opnum)
    {
    case PF_RPC_DEV_OPNUM_CONNECT:
-      LOG_INFO (
-         PF_RPC_LOG,
-         "CMRPC(%d): Incoming CONNECT request via DCE RPC on UDP\n",
-         __LINE__);
+      LOG_INFO (PF_RPC_LOG, "CMRPC(%d): Incoming CONNECT request via DCE RPC on UDP\n", __LINE__);
       ret = pf_cmrpc_rm_connect_ind (
          net,
          p_sess,
          req_pos,
          res_size,
          p_res,
-         p_res_pos);
+         p_res_pos,
+         p_call_pnet_abort,
+         pp_ar_2);
       break;
    case PF_RPC_DEV_OPNUM_RELEASE:
       LOG_INFO (
@@ -4259,6 +4274,9 @@ static int pf_cmrpc_dce_packet (
    uint32_t fault_code = 0;
    uint32_t reject_code = 0;
    bool set_state_paramend = false;
+   bool call_pnet_abort = false;
+
+   pf_ar_t * p_ar_2 = NULL;
 
    get_info.result = PF_PARSE_OK;
    get_info.p_buf = p_req;
@@ -4558,7 +4576,10 @@ static int pf_cmrpc_dce_packet (
                   max_rsp_len,
                   p_sess->out_buffer,
                   &p_sess->out_buf_len,
-                  &set_state_paramend);
+                  &set_state_paramend,
+                  &call_pnet_abort,
+                  &p_ar_2
+                  );
             }
             else if (
                memcmp (
@@ -4651,6 +4672,10 @@ static int pf_cmrpc_dce_packet (
             {
                /* Non-fragmented responses from us are not re-transmitted */
                ret = pf_cmrpc_send_once (net, p_sess, "response");
+
+               /* Send Alarm for duplicate CONNECT request */
+               if (call_pnet_abort == true)
+                  (void)pf_cmdev_cm_abort (net, p_ar_2);
             }
 
             if (set_state_paramend && p_sess->p_ar != NULL)
