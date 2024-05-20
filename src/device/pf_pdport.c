@@ -81,6 +81,37 @@ static int pf_pdport_enadis(pnet_t *net, int loc_port_num, pf_link_state_link_t 
    return 0;
 }
 
+/* XXX: FIXME refactor to a proper pnal_eth_pdport_dcp_boundary() function */
+/**
+ * Set or clear DCP boundary on port based on PDPortAdjsut:AdjustDCPBoundary
+ *
+ * @param   loc_port_num      In:   Local port number.
+ *                                  Valid range: 1 .. num_physical_ports
+ * @param   type              In:   Last octet in 01:0e:cf:00:00:0x (DCP Ident/Hello)
+ * @param   block             In:   1: block egress of DCP Ident(00) or DCP Hello(01)
+ * @return  POSIX OK(0) or non-zero error
+ */
+static int pf_pdport_dcp_boundary(pnet_t *net, int loc_port_num, int type, bool block)
+{
+   const char *dcp_mac_address_fmt = "01:0e:cf:00:00:%02x"; /* PN-AL-protocol, table 840, June 2022 */
+   pf_port_t *p_port_data = pf_port_get_state (net, loc_port_num);
+   char *port = p_port_data->netif.name;
+   char group[20];
+   char cmd[256];
+
+   snprintf (group, sizeof(group), dcp_mac_address_fmt, type);
+   LOG_INFO (PNET_LOG, "PDPORT(%d): DCP %s %s on %s\n",  __LINE__,
+	     block ? "block" : "unblock", group, port);
+
+   /* XXX: fix hardcoded br0 */
+   snprintf (cmd, sizeof(cmd), "bridge mdb %s dev br0 port %s grp %s permanent",
+	     block ? "del" : "replace", port, group);
+   if (system (cmd))
+      LOG_ERROR(PNET_LOG, "PDPORT(%d): failed command: '%s'\n", __LINE__, cmd);
+
+   return 0;
+}
+
 /* XXX: FIXME refactor to a proper pnal_eth_pdport_speed() function */
 static int pf_pdport_speed(pnet_t *net, int loc_port_num, uint16_t mau_type)
 {
@@ -233,6 +264,21 @@ static int pf_pdport_load (pnet_t * net, int loc_port_num)
          pf_lldp_send_enable (net, loc_port_num);
       }
 
+      if (p_port_data->pdport.adjust.mask & PF_PDPORT_ADJUST_DCPB_MASK)
+      {
+	 bool block_ident = p_port_data->pdport.adjust.dcp_boundary.dcp_boundary.do_not_send_dcp_ident;
+	 bool block_hello = p_port_data->pdport.adjust.dcp_boundary.dcp_boundary.do_not_send_dcp_hello;
+
+         pf_pdport_dcp_boundary (net, loc_port_num, PF_PDPORT_DCP_IDENT_TYPE, block_ident);
+         pf_pdport_dcp_boundary (net, loc_port_num, PF_PDPORT_DCP_HELLO_TYPE, block_hello);
+      }
+      else
+      {
+	 /* Default: unblock DCP traffic for all ports */
+         pf_pdport_dcp_boundary (net, loc_port_num, PF_PDPORT_DCP_IDENT_TYPE, false);
+         pf_pdport_dcp_boundary (net, loc_port_num, PF_PDPORT_DCP_HELLO_TYPE, false);
+      }
+
       ret = 0;
    }
    else
@@ -245,6 +291,12 @@ static int pf_pdport_load (pnet_t * net, int loc_port_num)
          loc_port_num);
       pf_pdport_speed (net, loc_port_num, 0);
       pf_pdport_enadis (net, loc_port_num, PF_PD_LINK_STATE_LINK_UP);
+
+      /* Initial state for all ports, unblock DCP ident/hello traffic */
+      pf_pdport_dcp_boundary (net, loc_port_num, PF_PDPORT_DCP_IDENT_TYPE, false);
+      pf_pdport_dcp_boundary (net, loc_port_num, PF_PDPORT_DCP_HELLO_TYPE, false);
+
+      /* Initial state for all ports, allow peer detection with LLDP */
       pf_lldp_send_enable (net, loc_port_num);
    }
 
@@ -688,6 +740,16 @@ int pf_pdport_read_ind (
                true,
                subslot,
                &p_port_data->pdport.adjust.speed,
+               res_size,
+               p_res,
+               p_pos);
+         }
+	 else if (p_port_data->pdport.adjust.mask & PF_PDPORT_ADJUST_DCPB_MASK)
+         {
+            pf_put_pdport_data_adj_dcp_boundary (
+               true,
+               subslot,
+               &p_port_data->pdport.adjust.dcp_boundary,
                res_size,
                p_res,
                p_pos);
@@ -1411,6 +1473,7 @@ static int pf_pdport_write_data_adj (
    pf_port_data_adjust_t port_data_adjust = {0};
    pf_adjust_link_state_t link_state;
    pf_adjust_peer_to_peer_boundary_t boundary;
+   pf_adjust_dcp_boundary_t dcp_boundary;
    pf_port_t * p_port_data = pf_port_get_state (net, loc_port_num);
 
    get_info.result = PF_PARSE_OK;
@@ -1469,6 +1532,32 @@ static int pf_pdport_write_data_adj (
          }
 
          ret = 0;
+      }
+      else
+      {
+         LOG_ERROR (
+            PNET_LOG,
+            "CPDPORT(%d): Failed to parse incoming PDPort data adjust.\n",
+            __LINE__);
+      }
+      break;
+   case PF_BT_ADJUST_DCP_BOUNDARY:
+      pf_get_port_data_adjust_dcp_boundary (&get_info, &pos, &dcp_boundary);
+      if (get_info.result == PF_PARSE_OK)
+      {
+	 int bident = dcp_boundary.dcp_boundary.do_not_send_dcp_ident;
+	 int bhello = dcp_boundary.dcp_boundary.do_not_send_dcp_hello;
+
+         p_port_data->pdport.adjust.mask |= PF_PDPORT_ADJUST_DCPB_MASK;
+         p_port_data->pdport.adjust.dcp_boundary = dcp_boundary;
+
+         LOG_INFO (PNET_LOG, "PDPORT(%d): DCP boundary, Ident: %s, Hello: %s\n",
+		   __LINE__, bident ? "true": "false", bhello ? "true": "false");
+
+         pf_pdport_dcp_boundary(net, loc_port_num, 0x00, bident);
+         pf_pdport_dcp_boundary(net, loc_port_num, 0x01, bhello);
+
+	 ret = 0;
       }
       else
       {

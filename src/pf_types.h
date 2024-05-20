@@ -546,6 +546,7 @@ typedef enum pf_block_type_values
    PF_BT_ADJUST_MAU_TYPE = 0x020E,
    PF_BT_ADJUST_LINK_STATE = 0x021B,
    PF_BT_ADJUST_PEER_TO_PEER_BOUNDARY = 0x0224,
+   PF_BT_ADJUST_DCP_BOUNDARY = 0x0225,
    PF_BT_INTERFACE_REAL_DATA = 0x0240,
    PF_BT_INTERFACE_ADJUST = 0x0250,
    PF_BT_PORT_STATISTICS = 0x0251,
@@ -2818,6 +2819,21 @@ typedef struct pf_peer_to_peer_boundary
    uint32_t reserved : 29;
 } pf_peer_to_peer_boundary_t;
 
+/* Used by pf_pdport_dcp_boundary() */
+#define PF_PDPORT_DCP_IDENT_TYPE  0x00
+#define PF_PDPORT_DCP_HELLO_TYPE  0x01
+
+/**
+ * Substitution name: DCPBoundary
+ * PN-AL-protocol (Jun22) Table 840
+ */
+typedef struct pf_dcp_boundary
+{
+   uint32_t do_not_send_dcp_ident : 1; /* 1: filter DCP Ident 01:0e:cf:00:00:00 */
+   uint32_t do_not_send_dcp_hello : 1; /* 1: filter DCP Hello 01:0e:cf:00:00:01 */
+   uint32_t reserved : 30;
+} pf_dcp_boundary_t;
+
 /**
  * Substitution name: AdjustPeerToPeerBoundary
  * BlockHeader, Padding, Padding, PeerToPeerBoundary, AdjustProperties,
@@ -2830,9 +2846,22 @@ typedef struct pf_port_data_adjust_peer_to_peer_boundary
                                   Ch.5.2.13.14 */
 } pf_adjust_peer_to_peer_boundary_t;
 
+/**
+ * Substitution name: AdjustDCPBoundary
+ * BlockHeader, Padding, Padding, DCPBoundary, AdjustProperties,
+ * [Padding*]
+ */
+typedef struct pf_port_data_adjust_dcp_boundary
+{
+   pf_dcp_boundary_t dcp_boundary;
+   uint16_t adjust_properties; /* Always 0, See PN-AL-protocol (Mar20)
+                                  Ch.5.2.13.14 */
+} pf_adjust_dcp_boundary_t;
+
 #define PF_PDPORT_ADJUST_MAUT_MASK  0x01
 #define PF_PDPORT_ADJUST_LINK_MASK  0x02
 #define PF_PDPORT_ADJUST_P2PB_MASK  0x04
+#define PF_PDPORT_ADJUST_DCPB_MASK  0x08
 
 typedef struct pf_pdport
 {
@@ -2849,6 +2878,7 @@ typedef struct pf_pdport
       pnal_eth_mau_t speed;
       pf_adjust_link_state_t link_state;
       pf_adjust_peer_to_peer_boundary_t peer_to_peer_boundary;
+      pf_adjust_dcp_boundary_t dcp_boundary;
    } adjust;
 } pf_pdport_t;
 

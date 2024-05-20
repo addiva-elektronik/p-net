@@ -1066,6 +1066,25 @@ void pf_get_port_data_adjust_peer_to_peer_boundary (
    p_boundary->adjust_properties = pf_get_uint16 (p_info, p_pos);
 }
 
+void pf_get_port_data_adjust_dcp_boundary (
+   pf_get_info_t * p_info,
+   uint16_t * p_pos,
+   pf_adjust_dcp_boundary_t * p_boundary)
+{
+   uint8_t dummy[4];
+   uint32_t temp;
+
+   memset (p_boundary, 0, sizeof (*p_boundary));
+
+   pf_get_mem (p_info, p_pos, 2, dummy); /* Padding */
+
+   temp = pf_get_uint32 (p_info, p_pos);
+   p_boundary->dcp_boundary.do_not_send_dcp_ident = pf_get_bits (temp, 0, 1);
+   p_boundary->dcp_boundary.do_not_send_dcp_hello = pf_get_bits (temp, 1, 1);
+
+   p_boundary->adjust_properties = pf_get_uint16 (p_info, p_pos);
+}
+
 void pf_get_interface_adjust (
    pf_get_info_t * p_info,
    uint16_t * p_pos,
