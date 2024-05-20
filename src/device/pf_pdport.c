@@ -24,10 +24,62 @@
 #include "pf_block_reader.h"
 #include <string.h>
 
+/* XXX: the following includes are for pf_systemf() */
+#include <errno.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+
+
 /**
  * @file
  * @brief Management Physical Device Port (PD Port) data
  */
+
+/* XXX: relocate this later to a global helper/utility function */
+/**
+ * @internal
+ *
+ * Formatted string version of system() that checks wait() return value.
+ *
+ * This function is a slightly modified systemf() from the libite (-lite)
+ * frog DNA library, copyright Joachim Wiberg, available under the liberal
+ * open source ISC license, see: https://github.com/troglobit/libite
+ *
+ * @param   fmt  A printf() style formatted string for the command to run
+ * @returns -1 on error, otherwise return code of command.
+ */
+static int pf_systemf (const char *fmt, ...)
+{
+   va_list ap;
+   char *cmd;
+   int len;
+   int rc;
+
+   va_start(ap, fmt);
+   len = vasprintf(&cmd, fmt, ap);
+   va_end(ap);
+
+   if (len == -1)
+      return -1;
+
+   rc = system(cmd);
+   free(cmd);
+
+   if (rc == -1)
+      return -1;
+
+   if (WIFEXITED(rc)) {
+      errno = 0;
+      rc = WEXITSTATUS(rc);
+   } else if (WIFSIGNALED(rc)) {
+      errno = EINTR;
+      rc = -1;
+   }
+
+   return rc;
+}
 
 /**
  * Get configuration file name for one port
@@ -60,25 +112,26 @@ static const char * pf_pdport_get_filename (int loc_port_num)
 static int pf_pdport_enadis(pnet_t *net, int loc_port_num, pf_link_state_link_t link)
 {
    pf_port_t *p_port_data = pf_port_get_state (net, loc_port_num);
-   char cmd[256];
    char *updown;
+   int rc;
 
    LOG_INFO(PNET_LOG, "PDPORT(%d): enable/disable link %s => %d\n",
-	     __LINE__, p_port_data->netif.name, link);
+	    __LINE__, p_port_data->netif.name, link);
    if (link == PF_PD_LINK_STATE_LINK_UP)
       updown = "up";
    else if (link == PF_PD_LINK_STATE_LINK_DOWN)
       updown = "down";
    else {
-      LOG_ERROR(PNET_LOG, "PDPORT(%d): unsupported link state %d\n", __LINE__, link);
+      LOG_ERROR (PNET_LOG, "PDPORT(%d): unsupported link state %d\n", __LINE__, link);
       return -1;		/* Not supported */
    }
 
-   snprintf(cmd, sizeof(cmd), "ifconfig %s %s", p_port_data->netif.name, updown);
-   if (system (cmd))
-      LOG_ERROR(PNET_LOG, "PDPORT(%d): failed command: '%s'\n", __LINE__, cmd);
+   rc = pf_systemf ("ifconfig %s %s", p_port_data->netif.name, updown);
+   if (rc)
+      LOG_ERROR (PNET_LOG, "PDPORT(%d): failed command: 'ifconfig %s %s'\n", __LINE__,
+		 p_port_data->netif.name, updown);
 
-   return 0;
+   return rc;
 }
 
 /* XXX: FIXME refactor to a proper pnal_eth_pdport_dcp_boundary() function */
@@ -97,27 +150,28 @@ static int pf_pdport_dcp_boundary(pnet_t *net, int loc_port_num, int type, bool 
    pf_port_t *p_port_data = pf_port_get_state (net, loc_port_num);
    char *port = p_port_data->netif.name;
    char group[20];
-   char cmd[256];
+   int rc;
 
    snprintf (group, sizeof(group), dcp_mac_address_fmt, type);
    LOG_INFO (PNET_LOG, "PDPORT(%d): DCP %s %s on %s\n",  __LINE__,
 	     block ? "block" : "unblock", group, port);
 
    /* XXX: fix hardcoded br0 */
-   snprintf (cmd, sizeof(cmd), "bridge mdb %s dev br0 port %s grp %s permanent",
-	     block ? "del" : "replace", port, group);
-   if (system (cmd))
-      LOG_ERROR(PNET_LOG, "PDPORT(%d): failed command: '%s'\n", __LINE__, cmd);
+   rc = pf_systemf ("bridge mdb %s dev br0 port %s grp %s permanent", block ? "del" : "replace", port, group);
+   if (rc)
+      LOG_ERROR (PNET_LOG, "PDPORT(%d): failed %sblocking DCP %s on port %s\n", __LINE__,
+		 block ? "" : "un", group, port);
 
-   return 0;
+   return rc;
 }
 
 /* XXX: FIXME refactor to a proper pnal_eth_pdport_speed() function */
 static int pf_pdport_speed(pnet_t *net, int loc_port_num, uint16_t mau_type)
 {
    pf_port_t *p_port_data = pf_port_get_state (net, loc_port_num);
+   char *port = p_port_data->netif.name;
    const char *speed, *duplex;
-   char cmd[256];
+   int rc;
 
    switch (mau_type)
    {
@@ -146,20 +200,19 @@ static int pf_pdport_speed(pnet_t *net, int loc_port_num, uint16_t mau_type)
 	 speed = "1000"; duplex = "full";
 	 break;
       default:
-	 LOG_ERROR(PNET_LOG, "PDPORT(%d): unsupported MAU type %u\n", __LINE__, mau_type);
+	 LOG_ERROR (PNET_LOG, "PDPORT(%d): unsupported MAU type %u\n", __LINE__, mau_type);
 	 return -1;
    }
 
-   LOG_INFO(PNET_LOG, "PDPORT(%d): %s speed %s duplex %s\n", __LINE__,
-	    p_port_data->netif.name, speed, duplex);
-   if (strcmp(speed, "auto"))
-      snprintf(cmd, sizeof(cmd), "ethtool -s %s autoneg off speed %s duplex %s",
-	       p_port_data->netif.name, speed, duplex);
+   LOG_INFO (PNET_LOG, "PDPORT(%d): %s speed %s duplex %s\n", __LINE__, port, speed, duplex);
+   if (strcmp (speed, "auto"))
+      rc = pf_systemf ("ethtool -s %s autoneg off speed %s duplex %s", port, speed, duplex);
    else
-      snprintf(cmd, sizeof(cmd), "ethtool -s %s autoneg on", p_port_data->netif.name);
+      rc = pf_systemf ("ethtool -s %s autoneg on", port);
 
-   if (system (cmd))
-      LOG_ERROR(PNET_LOG, "PDPORT(%d): failed command: '%s'\n", __LINE__, cmd);
+   if (rc)
+      LOG_ERROR (PNET_LOG, "PDPORT(%d): failed setting port %s speed %s duplex %s\n",
+		 __LINE__, port, speed, duplex);
 
    return 0;
 }
