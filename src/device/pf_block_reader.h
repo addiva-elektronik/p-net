@@ -394,6 +394,17 @@ void pf_get_port_data_adjust_peer_to_peer_boundary (
    pf_adjust_peer_to_peer_boundary_t * boundary);
 
 /**
+ * Extract a AdjustDCPBoundary data block from a buffer.
+ * @param p_info           InOut: The parser information.
+ * @param p_pos            InOut: The current parsing position.
+ * @param boundary         Out:   Destination structure.
+ */
+void pf_get_port_data_adjust_dcp_boundary (
+   pf_get_info_t * p_info,
+   uint16_t * p_pos,
+   pf_adjust_dcp_boundary_t * p_boundary);
+
+/**
  * Extract a pd interface adjust block from a buffer.
  *
  * @param p_info           InOut: The parser information.

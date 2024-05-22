@@ -851,6 +851,24 @@ void pf_put_pdport_data_adj_p2pb (
    uint16_t * p_pos);
 
 /**
+ * Insert PDport data adjust block into buffer
+ *
+ * @param is_big_endian   In:    Endianness of the destination buffer.
+ * @param subslot         In:    DAP subslot identifying the port.
+ * @param p_dcp_boundary  In:    DCP boundary
+ * @param res_len         In:    Size of destination buffer.
+ * @param p_bytes         Out:   Destination buffer.
+ * @param p_pos           InOut: Position in destination buffer.
+ */
+void pf_put_pdport_data_adj_dcp_boundary (
+   bool is_big_endian,
+   uint16_t subslot,
+   const pf_adjust_dcp_boundary_t * p_dcp_boundary,
+   uint16_t res_len,
+   uint8_t * p_bytes,
+   uint16_t * p_pos);
+
+/**
  * Insert PDport data adjust block into a buffer.
  *
  * @param is_big_endian             In:    Endianness of the destination buffer.

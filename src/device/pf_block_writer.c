@@ -4373,6 +4373,114 @@ void pf_put_pdport_data_adj_p2pb (
 
 /**
  * @internal
+ * Insert dcp boundary
+ * @param is_big_endian   In:    Endianness of the destination buffer.
+ * @param p_dcp_boundary  In:    The p-net stack instance
+ * @param res_len         In:    Size of destination buffer.
+ * @param p_bytes         Out:   Destination buffer.
+ * @param p_pos           InOut: Position in destination buffer.
+ */
+void pf_put_dcp_boundary (
+   bool is_big_endian,
+   const pf_adjust_dcp_boundary_t * p_dcp_boundary,
+   uint16_t res_len,
+   uint8_t * p_bytes,
+   uint16_t * p_pos)
+{
+   uint16_t block_pos = *p_pos;
+   uint16_t block_len = 0;
+   uint32_t temp_u32 = 0;
+
+   /* Block header first */
+   pf_put_block_header (
+      is_big_endian,
+      PF_BT_ADJUST_DCP_BOUNDARY,
+      0, /* Dont know block_len yet */
+      PNET_BLOCK_VERSION_HIGH,
+      PNET_BLOCK_VERSION_LOW,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   pf_put_padding (2, res_len, p_bytes, p_pos);
+
+   /* Adjusted DCP Boundary */
+   temp_u32 = 0;
+   pf_put_bits (
+      p_dcp_boundary->dcp_boundary.do_not_send_dcp_ident,
+      1,
+      0,
+      &temp_u32);
+   pf_put_bits (
+      p_dcp_boundary->dcp_boundary.do_not_send_dcp_hello,
+      1,
+      1,
+      &temp_u32);
+
+   pf_put_uint32 (is_big_endian, temp_u32, res_len, p_bytes, p_pos);
+
+   /* Adjust Properties */
+   pf_put_uint16 (
+      is_big_endian,
+      p_dcp_boundary->adjust_properties,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   pf_put_padding (2, res_len, p_bytes, p_pos);
+
+   /* Finally insert the block length into the block header */
+   block_len = *p_pos - (block_pos + 4);
+   block_pos += offsetof (pf_block_header_t, block_length); /* Point to correct
+                                                               place */
+   pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
+}
+
+void pf_put_pdport_data_adj_dcp_boundary (
+   bool is_big_endian,
+   uint16_t subslot,
+   const pf_adjust_dcp_boundary_t * p_dcp_boundary,
+   uint16_t res_len,
+   uint8_t * p_bytes,
+   uint16_t * p_pos)
+{
+   uint16_t block_pos = *p_pos;
+   uint16_t block_len = 0;
+
+   /* Block header first */
+   pf_put_block_header (
+      is_big_endian,
+      PF_BT_PDPORT_DATA_ADJUST,
+      0, /* Dont know block_len yet */
+      PNET_BLOCK_VERSION_HIGH,
+      PNET_BLOCK_VERSION_LOW,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   pf_put_padding (2, res_len, p_bytes, p_pos);
+
+   /* Slot and subslot */
+   pf_put_uint16 (is_big_endian, PNET_SLOT_DAP_IDENT, res_len, p_bytes, p_pos);
+   pf_put_uint16 (is_big_endian, subslot, res_len, p_bytes, p_pos);
+
+   /* DCP_boundary*/
+   pf_put_dcp_boundary (
+      is_big_endian,
+      p_dcp_boundary,
+      res_len,
+      p_bytes,
+      p_pos);
+
+   /* Finally insert the block length into the block header */
+   block_len = *p_pos - (block_pos + 4);
+   block_pos += offsetof (pf_block_header_t, block_length); /* Point to correct
+                                                               place */
+   pf_put_uint16 (is_big_endian, block_len, res_len, p_bytes, &block_pos);
+}
+
+/**
+ * @internal
  * Insert link_state
  * @param is_big_endian           In:    Endianness of the destination buffer.
  * @param link_state              In:    The p-net stack instance
