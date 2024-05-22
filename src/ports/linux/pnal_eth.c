@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 struct pnal_eth_handle
 {
@@ -92,10 +93,9 @@ pnal_eth_handle_t * pnal_eth_init (
    void * arg)
 {
    pnal_eth_handle_t * handle;
-   int i;
+   int i, ret, ifindex;
    struct ifreq ifr;
    struct sockaddr_ll sll;
-   int ifindex;
    struct timeval timeout;
    struct packet_mreq mreq;
    const uint8_t pn_mcast_addr[ETH_ALEN] = {0x01, 0x0e, 0xcf, 0x00, 0x00, 0x00};
@@ -105,49 +105,113 @@ pnal_eth_handle_t * pnal_eth_init (
    handle = malloc (sizeof (pnal_eth_handle_t));
    if (handle == NULL)
    {
+      LOG_FATAL (
+         PF_PNAL_LOG,
+         "PNAL(%d): Failed allocating Ethernet handle, errno %d\n",
+         __LINE__, errno);
       return NULL;
    }
 
    handle->arg = arg;
    handle->callback = callback;
    handle->socket = socket (PF_PACKET, SOCK_RAW, htons (linux_receive_type));
+   if (handle->socket == -1)
+   {
+      LOG_FATAL (
+         PF_PNAL_LOG,
+         "PNAL(%d): Failed opening raw packet socket, errno %d\n",
+         __LINE__, errno);
+      free(handle);
+
+      return NULL;
+   }
 
    /* Adjust send timeout */
    timeout.tv_sec = 0;
    timeout.tv_usec = 1;
-   setsockopt (
+   ret = setsockopt (
       handle->socket,
       SOL_SOCKET,
       SO_SNDTIMEO,
       &timeout,
       sizeof (timeout));
+   if (ret == -1)
+   {
+      LOG_WARNING (
+         PF_PNAL_LOG,
+         "PNAL(%d): failed seting socket send timeout, errno %d\n",
+         __LINE__, errno);
+   }
 
    /* Send outgoing messages directly to the interface, without using Linux
     * routing */
    i = 1;
-   setsockopt (handle->socket, SOL_SOCKET, SO_DONTROUTE, &i, sizeof (i));
+   ret = setsockopt (handle->socket, SOL_SOCKET, SO_DONTROUTE, &i, sizeof (i));
+   if (ret == -1)
+   {
+      LOG_WARNING (
+         PF_PNAL_LOG,
+         "PNAL(%d): failed seting socket dont-route option, errno %d\n",
+         __LINE__, errno);
+   }
 
    /* Read interface index */
    strcpy (ifr.ifr_name, if_name);
-   ioctl (handle->socket, SIOCGIFINDEX, &ifr);
+   ret = ioctl (handle->socket, SIOCGIFINDEX, &ifr);
+      if (ret == -1)
+   {
+      LOG_FATAL (
+         PF_PNAL_LOG,
+         "PNAL(%d): Failed getting ifindex for %s, errno %d\n",
+         __LINE__, if_name, errno);
+     close(handle->socket);
+     free(handle);
+
+     return NULL;
+   }
    ifindex = ifr.ifr_ifindex;
 
    /* Set flags of NIC interface */
    strcpy (ifr.ifr_name, if_name);
    ifr.ifr_flags = 0;
-   ioctl (handle->socket, SIOCGIFFLAGS, &ifr);
+   ret = ioctl (handle->socket, SIOCGIFFLAGS, &ifr);
+   if (ret == -1)
+   {
+      LOG_WARNING (
+         PF_PNAL_LOG,
+         "PNAL(%d): failed reading %s interface flags, errno %d\n",
+         __LINE__, if_name, errno);
+      ifr.ifr_flags = 0;
+   }
+
    ifr.ifr_flags = ifr.ifr_flags | IFF_MULTICAST | IFF_BROADCAST;
    if (receive_type == PNAL_ETHTYPE_ALL)
    {
       ifr.ifr_flags |= IFF_ALLMULTI; /* Receive all multicasts */
    }
-   ioctl (handle->socket, SIOCSIFFLAGS, &ifr);
+   ret = ioctl (handle->socket, SIOCSIFFLAGS, &ifr);
+   if (ret == -1)
+   {
+      LOG_WARNING (
+         PF_PNAL_LOG,
+         "PNAL(%d): failed setting %s interface flags, errno %d\n",
+         __LINE__, if_name, errno);
+      ifr.ifr_flags = 0;
+   }
 
    /* Bind socket to relevant protocol */
    sll.sll_family = AF_PACKET;
    sll.sll_ifindex = ifindex;
    sll.sll_protocol = htons (linux_receive_type);
-   bind (handle->socket, (struct sockaddr *)&sll, sizeof (sll));
+   ret = bind (handle->socket, (struct sockaddr *)&sll, sizeof (sll));
+   if (ret == -1)
+   {
+      LOG_WARNING (
+         PF_PNAL_LOG,
+         "PNAL(%d): failed binding socket to ifindex %d (%s), errno %d\n",
+         __LINE__, ifindex, if_name, errno);
+      ifr.ifr_flags = 0;
+   }
 
    /* Join profinet multicast group */
    mreq.mr_ifindex = ifindex;
@@ -165,8 +229,8 @@ pnal_eth_handle_t * pnal_eth_init (
    {
       LOG_WARNING (
          PF_PNAL_LOG,
-         "PNAL(%d): Failed to join Profinet multicast group\n",
-         __LINE__);
+         "PNAL(%d): Failed to join Profinet multicast group, errno %d\n",
+         __LINE__, errno);
    }
 
    if (handle->socket > -1)
