@@ -156,8 +156,7 @@ static int pf_pdport_dcp_boundary(pnet_t *net, int loc_port_num, int type, bool 
    LOG_INFO (PNET_LOG, "PDPORT(%d): DCP %s %s on %s\n",  __LINE__,
 	     block ? "block" : "unblock", group, port);
 
-   /* XXX: fix hardcoded br0 */
-   rc = pf_systemf ("bridge mdb %s dev br0 port %s grp %s permanent", block ? "del" : "replace", port, group);
+   rc = pf_systemf ("mdb %s %s %s", block ? "del" : "add", port, group);
    if (rc)
       LOG_ERROR (PNET_LOG, "PDPORT(%d): failed %sblocking DCP %s on port %s\n", __LINE__,
 		 block ? "" : "un", group, port);
