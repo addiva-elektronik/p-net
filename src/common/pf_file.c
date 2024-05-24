@@ -39,7 +39,7 @@
 #define PF_FILE_MAGIC 0x504E4554U /* "PNET" */
 
 /* Increase every time the saved contents have another format */
-#define PF_FILE_VERSION 0x00000001U
+#define PF_FILE_VERSION 0x00000002U
 
 /* The configurable constant PNET_MAX_FILENAME_SIZE should be at least
  * as large as the longest filename used, including termination.
