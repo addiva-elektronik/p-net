@@ -782,8 +782,8 @@ int pnal_get_ip_suite (
 
    if (pnal_get_ipmask(interface_name, p_ipaddr, p_netmask))
    {
-      p_ipaddr = PNAL_IPADDR_INVALID;
-      p_netmask = PNAL_IPADDR_INVALID;
+      *p_ipaddr = PNAL_IPADDR_INVALID;
+      *p_netmask = PNAL_IPADDR_INVALID;
    }
    *p_gw = pnal_get_gateway (interface_name);
    ret = pnal_get_hostname (hostname);
