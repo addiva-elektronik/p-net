@@ -126,6 +126,26 @@ pnal_eth_handle_t * pnal_eth_init (
       return NULL;
    }
 
+   /**
+    * According to IEEE 802.1p, network traffic can be classified into 
+    * different priority levels to provide Quality of Service (QoS). 
+    * In this case, we set the priority level to 6, which corresponds 
+    * to the "Internetwork Control" traffic class. This level is used 
+    * for critical network control traffic that must be prioritized 
+    * above regular application traffic. By setting the socket priority 
+    * to 6 using the SO_PRIORITY option, we ensure that PROFINET Real-Time 
+    * (RT) frames are transmitted with high priority.
+    */
+   int priority = 6;
+   ret = setsockopt(handle->socket, SOL_SOCKET, SO_PRIORITY, &priority, sizeof(priority));
+   if (ret == -1)
+   {
+      LOG_WARNING (
+         PF_PNAL_LOG,
+         "PNAL(%d): failed setting socket priority, errno %d\n",
+         __LINE__, errno);
+   }
+
    /* Adjust send timeout */
    timeout.tv_sec = 0;
    timeout.tv_usec = 1;
